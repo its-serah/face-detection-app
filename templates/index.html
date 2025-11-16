@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Detection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 32px;
+            font-weight: 600;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #333;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 16px;
+            transition: color 0.3s;
+        }
+
+        .tab.active {
+            color: #fff;
+            border-bottom: 2px solid #fff;
+        }
+
+        .tab:hover {
+            color: #fff;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .upload-section {
+            text-align: center;
+            padding: 40px;
+            border: 2px dashed #333;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .upload-section input[type="file"] {
+            display: none;
+        }
+
+        .upload-btn {
+            padding: 12px 32px;
+            background-color: #fff;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .upload-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .webcam-section {
+            text-align: center;
+        }
+
+        video, canvas {
+            max-width: 100%;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 12px 32px;
+            background-color: #fff;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .btn:disabled {
+            background-color: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .result {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .result img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .face-count {
+            font-size: 18px;
+            margin-top: 15px;
+        }
+
+        .error {
+            color: #ff4444;
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .loading {
+            text-align: center;
+            margin-top: 20px;
+            color: #888;
+        }
+
+        #video {
+            display: none;
+        }
+
+        #video.active {
+            display: block;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Face Detection</h1>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('upload')">Upload Image</button>
+            <button class="tab" onclick="switchTab('webcam')">Use Webcam</button>
+        </div>
+
+        <div id="upload-tab" class="tab-content active">
+            <div class="upload-section">
+                <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(event)">
+                <label for="fileInput">
+                    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                        Choose Image
+                    </button>
+                </label>
+                <p style="margin-top: 15px; color: #888;">Supported formats: JPG, PNG</p>
+            </div>
+
+            <div id="uploadResult" class="result hidden">
+                <img id="resultImage" src="" alt="Detection result">
+                <div class="face-count" id="faceCount"></div>
+            </div>
+
+            <div id="uploadLoading" class="loading hidden">Processing...</div>
+            <div id="uploadError" class="error hidden"></div>
+        </div>
+
+        <div id="webcam-tab" class="tab-content">
+            <div class="webcam-section">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+
+                <div class="controls">
+                    <button class="btn" id="startBtn" onclick="startWebcam()">Start Webcam</button>
+                    <button class="btn" id="captureBtn" onclick="captureAndDetect()" disabled>Detect Faces</button>
+                    <button class="btn" id="stopBtn" onclick="stopWebcam()" disabled>Stop</button>
+                </div>
+
+                <div class="face-count" id="webcamFaceCount"></div>
+                <div id="webcamError" class="error hidden"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stream = null;
+        let currentTab = 'upload';
+
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            if (tab === 'upload') {
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('upload-tab').classList.add('active');
+                stopWebcam();
+            } else {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('webcam-tab').classList.add('active');
+            }
+        }
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            document.getElementById('uploadLoading').classList.remove('hidden');
+            document.getElementById('uploadError').classList.add('hidden');
+            document.getElementById('uploadResult').classList.add('hidden');
+
+            try {
+                const response = await fetch('/detect', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('resultImage').src = data.image;
+                    document.getElementById('faceCount').textContent = `Detected ${data.face_count} face${data.face_count !== 1 ? 's' : ''}`;
+                    document.getElementById('uploadResult').classList.remove('hidden');
+                } else {
+                    document.getElementById('uploadError').textContent = data.error || 'Detection failed';
+                    document.getElementById('uploadError').classList.remove('hidden');
+                }
+            } catch (error) {
+                document.getElementById('uploadError').textContent = 'Error: ' + error.message;
+                document.getElementById('uploadError').classList.remove('hidden');
+            } finally {
+                document.getElementById('uploadLoading').classList.add('hidden');
+            }
+        }
+
+        async function startWebcam() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                video.classList.add('active');
+                
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('captureBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('webcamError').classList.add('hidden');
+            } catch (error) {
+                document.getElementById('webcamError').textContent = 'Error accessing webcam: ' + error.message;
+                document.getElementById('webcamError').classList.remove('hidden');
+            }
+        }
+
+        function stopWebcam() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                document.getElementById('video').classList.remove('active');
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('captureBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = true;
+            }
+        }
+
+        async function captureAndDetect() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            const imageData = canvas.toDataURL('image/png');
+
+            try {
+                const response = await fetch('/detect-webcam', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: imageData })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const img = new Image();
+                    img.onload = function() {
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        ctx.drawImage(img, 0, 0);
+                    };
+                    img.src = data.image;
+                    
+                    document.getElementById('webcamFaceCount').textContent = `Detected ${data.face_count} face${data.face_count !== 1 ? 's' : ''}`;
+                } else {
+                    document.getElementById('webcamError').textContent = data.error || 'Detection failed';
+                    document.getElementById('webcamError').classList.remove('hidden');
+                }
+            } catch (error) {
+                document.getElementById('webcamError').textContent = 'Error: ' + error.message;
+                document.getElementById('webcamError').classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
