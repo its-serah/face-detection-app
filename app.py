@@ -44,8 +44,13 @@ def detect_faces():
         img_bytes = file.read()
         img = Image.open(io.BytesIO(img_bytes))
         
+        # Resize if too large
+        max_size = 1280
+        if img.width > max_size or img.height > max_size:
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+        
         # Run detection
-        results = model(img)
+        results = model(img, conf=0.5)
         
         # Draw bounding boxes
         img_draw = img.copy()
@@ -79,7 +84,10 @@ def detect_faces():
         })
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f'Error in detect_faces: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Detection failed: {str(e)}'}), 500
 
 @app.route('/detect-webcam', methods=['POST'])
 def detect_webcam():
@@ -89,12 +97,21 @@ def detect_webcam():
             return jsonify({'error': 'No image data provided'}), 400
         
         # Decode base64 image
-        img_data = data['image'].split(',')[1]
+        try:
+            img_data = data['image'].split(',')[1]
+        except IndexError:
+            img_data = data['image']
+        
         img_bytes = base64.b64decode(img_data)
         img = Image.open(io.BytesIO(img_bytes))
         
+        # Resize if too large
+        max_size = 1280
+        if img.width > max_size or img.height > max_size:
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+        
         # Run detection
-        results = model(img)
+        results = model(img, conf=0.5)
         
         # Draw bounding boxes
         img_draw = img.copy()
@@ -124,7 +141,10 @@ def detect_webcam():
         })
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f'Error in detect_webcam: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Detection failed: {str(e)}'}), 500
 
 if __name__ == '__main__':
     load_model()
