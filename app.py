@@ -20,10 +20,8 @@ def load_model():
     if model is None:
         try:
             print("Starting model download...")
-            model_path = hf_hub_download(repo_id="arnabdhar/YOLOv8-Face-Detection", filename="model.pt")
-            print(f"Model downloaded to: {model_path}")
-            print("Loading model...")
-            model = YOLO(model_path)
+            # Use lighter YOLOv8n model instead of full model
+            model = YOLO('yolov8n-face.pt')
             print("Model loaded successfully")
         except Exception as e:
             print(f"Error loading model: {e}")
@@ -33,14 +31,23 @@ def load_model():
     return model
 
 def get_model():
+    global model_loaded
     load_model()
     if model is None:
         raise RuntimeError("Model failed to load")
+    model_loaded = True
     return model
+
+model_loading = False
+model_loaded = False
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok', 'model_loaded': model_loaded}), 200
 
 @app.route('/detect', methods=['POST'])
 def detect_faces():
