@@ -19,12 +19,24 @@ def load_model():
     global model
     if model is None:
         try:
+            print("Starting model download...")
             model_path = hf_hub_download(repo_id="arnabdhar/YOLOv8-Face-Detection", filename="model.pt")
+            print(f"Model downloaded to: {model_path}")
+            print("Loading model...")
             model = YOLO(model_path)
             print("Model loaded successfully")
         except Exception as e:
             print(f"Error loading model: {e}")
-            raise e
+            import traceback
+            traceback.print_exc()
+            model = None
+    return model
+
+def get_model():
+    load_model()
+    if model is None:
+        raise RuntimeError("Model failed to load")
+    return model
 
 @app.route('/')
 def index():
@@ -40,6 +52,9 @@ def detect_faces():
         if file.filename == '':
             return jsonify({'error': 'No image selected'}), 400
         
+        # Load model on first request
+        detection_model = get_model()
+        
         # Read image
         img_bytes = file.read()
         img = Image.open(io.BytesIO(img_bytes))
@@ -50,7 +65,7 @@ def detect_faces():
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
         # Run detection
-        results = model(img, conf=0.5)
+        results = detection_model(img, conf=0.5)
         
         # Draw bounding boxes
         img_draw = img.copy()
@@ -96,6 +111,9 @@ def detect_webcam():
         if 'image' not in data:
             return jsonify({'error': 'No image data provided'}), 400
         
+        # Load model on first request
+        detection_model = get_model()
+        
         # Decode base64 image
         try:
             img_data = data['image'].split(',')[1]
@@ -111,7 +129,7 @@ def detect_webcam():
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
         # Run detection
-        results = model(img, conf=0.5)
+        results = detection_model(img, conf=0.5)
         
         # Draw bounding boxes
         img_draw = img.copy()
@@ -147,6 +165,5 @@ def detect_webcam():
         return jsonify({'error': f'Detection failed: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    load_model()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
